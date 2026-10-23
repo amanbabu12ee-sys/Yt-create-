@@ -1,0 +1,60 @@
+# File: .github/workflows/build_youtube_apk.yml
+# Architecture: GitHub Actions Cloud Runner (Ubuntu-Latest / Java 17 / ReVanced CLI v4.6.0)
+# Purpose: Compiles the patched ad-free Premium APK in the cloud and provides a direct download link in the Actions tab.
+
+name: Build AdFree YouTube APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  compile-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Fetch ReVanced Toolchain & Stock APK
+        run: |
+          mkdir -p build_env && cd build_env
+          
+          # 1. Fetch CLI, Patches, Integrations, and GmsCore
+          curl -sL "https://github.com/ReVanced/revanced-cli/releases/download/v4.6.0/revanced-cli-4.6.0-all.jar" -o revanced-cli.jar
+          curl -sL "https://github.com/ReVanced/revanced-patches/releases/download/v4.16.0/revanced-patches-4.16.0.jar" -o revanced-patches.jar
+          curl -sL "https://github.com/ReVanced/revanced-integrations/releases/download/v1.15.0/revanced-integrations-1.15.0.apk" -o revanced-integrations.apk
+          curl -sL "https://github.com/ReVanced/GmsCore/releases/latest/download/app.revanced.android.gms-240913008-signed.apk" -o GmsCore_MicroG.apk
+
+          # 2. Fetch Stock YouTube 19.16.39 (nodpi arm64-v8a)
+          curl -sL -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            "https://archive.org/download/youtube-19.16.39-nodpi/com.google.android.youtube_19.16.39-1545903168_minAPI26(arm64-v8a,armeabi-v7a,x86,x86_64)(nodpi)_apkmirror.com.apk" \
+            -o stock_youtube.apk
+
+      - name: Patch Bytecode & Sign APK
+        run: |
+          cd build_env
+          java -jar revanced-cli.jar patch \
+            --patch-bundle revanced-patches.jar \
+            --merge revanced-integrations.apk \
+            --include "Video ads" \
+            --include "General ads" \
+            --include "Remove background playback restrictions" \
+            --include "GmsCore support" \
+            --include "SponsorBlock" \
+            --include "Return YouTube Dislike" \
+            --include "Hide Shorts components" \
+            --out YouTube_Premium_AdFree_Ready.apk \
+            stock_youtube.apk
+
+      - name: Upload Ready-to-Install APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTube-AdFree-Premium-Bundle
+          path: |
+            build_env/YouTube_Premium_AdFree_Ready.apk
+            build_env/GmsCore_MicroG.apk
+            
